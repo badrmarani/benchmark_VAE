@@ -25,5 +25,5 @@ class GWAEConfig(VAEConfig):
     coef_gradient_penalty: float = 10.0
 
     uses_default_discriminator: bool = True
-    discriminator_input_dim: int = None
+    discriminator_input_dim: List = None
     max_epochs_discriminator: int = 5
