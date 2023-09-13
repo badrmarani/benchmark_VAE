@@ -194,6 +194,11 @@ class AutoModel(nn.Module):
 
             model = PIWAE.load_from_folder(dir_path=dir_path)
 
+        elif model_name == "GWAEConfig":
+            from ..gwae import GWAE
+            
+            model = GWAE.load_from_folder(dir_path=dir_path)
+
         else:
             raise NameError(
                 "Cannot reload automatically the model... "
@@ -456,6 +461,13 @@ class AutoModel(nn.Module):
             from ..piwae import PIWAE
 
             model = PIWAE.load_from_hf_hub(
+                hf_hub_path=hf_hub_path, allow_pickle=allow_pickle
+            )
+
+        elif model_name == "GWAEConfig":
+            from ..gwae import GWAE
+            
+            model = GWAE.load_from_hf_hub(
                 hf_hub_path=hf_hub_path, allow_pickle=allow_pickle
             )
 

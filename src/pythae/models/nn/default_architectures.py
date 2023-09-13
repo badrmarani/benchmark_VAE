@@ -311,3 +311,49 @@ class Discriminator_MLP(BaseDiscriminator):
                 output["embedding"] = out
 
         return output
+
+class Discriminator_GVAE_MLP(BaseDiscriminator):
+    def __init__(self, args: dict):
+        BaseDiscriminator.__init__(self)
+
+        (
+            self.discriminator_input_dim,
+            self.discriminator_latent_dim
+        ) = args.discriminator_input_dim
+
+        self.x_net = self.make_network(np.prod(self.discriminator_input_dim), (256,), 64)
+        self.z_net = self.make_network(self.discriminator_latent_dim, (256,), 64)
+        self.xz_net = self.make_network(128, (64,), 1)
+
+    def x_network(self, x):
+        x = x.view(x.size(0), -1)
+        return self.x_net(x)
+
+    def z_network(self, z):
+        z = z.view(z.size(0), -1)
+        return self.z_net(x)
+
+    def xz_network(self, x, z):
+        return self(x, z)
+
+    def make_network(self, input_dim, compress_dims, output_dim):
+        layers = []
+        
+        dim = input_dim
+        
+        print(compress_dims)
+        
+        for item in compress_dims:
+            layers += [nn.utils.spectral_norm(nn.Linear(dim, item)), nn.ReLU()]
+            dim = item
+        layers += [nn.utils.spectral_norm(nn.Linear(dim, output_dim))]
+        layers = nn.Sequential(*layers)
+        return layers
+
+    def forward(self, x: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+        batch_size = x.size(0)
+        x = x.view(batch_size, -1)
+        z = z.view(batch_size, -1)
+        
+        h = 0.5 * torch.cat([self.x_net(x), self.z_net(z)], dim=1)
+        return self.xz_net(h)

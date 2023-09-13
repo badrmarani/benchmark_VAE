@@ -9,6 +9,7 @@ import torch
 import torch.distributed as dist
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
+from torch.nn.utils.spectral_norm import SpectralNorm
 
 from ...data.datasets import BaseDataset
 from ...models import BaseAE
@@ -324,6 +325,13 @@ class AdversarialTrainer(BaseTrainer):
                     discriminator_metrics=epoch_train_discriminator_loss,
                 )
 
+            # Fix SpectralNorm deepcopy            
+            # Delete the none-graph leaf tensor.
+            for module in self.model.discriminator.modules():
+                for _, hook in module._forward_pre_hooks.items():
+                    if isinstance(hook, SpectralNorm):
+                        delattr(module, hook.name)
+
             if (
                 epoch_eval_loss < best_eval_loss
                 and not self.training_config.keep_best_on_train
@@ -339,6 +347,12 @@ class AdversarialTrainer(BaseTrainer):
                 best_train_loss = epoch_train_loss
                 best_model = deepcopy(self.model)
                 self._best_model = best_model
+
+            # Re-create the deleted tensor.
+            for module in self.model.discriminator.modules():
+                for _, hook in module._forward_pre_hooks.items():
+                    if isinstance(hook, SpectralNorm):
+                        hook(module, None)
 
             if (
                 self.training_config.steps_predict is not None
