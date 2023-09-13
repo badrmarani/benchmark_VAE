@@ -180,6 +180,11 @@ class AutoConfig(BaseConfig):
 
             model_config = PIWAEConfig.from_json_file(json_path)
 
+        elif config_name == "GWAEConfig":
+            from ..gwae import GWAEConfig
+
+            model_config = GWAEConfig.from_json_file(json_path)
+
         else:
             raise NameError(
                 "Cannot reload automatically the model configuration... "
