@@ -325,7 +325,7 @@ class AdversarialTrainer(BaseTrainer):
                     discriminator_metrics=epoch_train_discriminator_loss,
                 )
 
-            # Fix SpectralNorm deepcopy            
+            # Fix SpectralNorm deepcopy.
             # Delete the none-graph leaf tensor.
             for module in self.model.discriminator.modules():
                 for _, hook in module._forward_pre_hooks.items():
