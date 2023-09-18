@@ -1,5 +1,7 @@
 import inspect
 import logging
+import os
+import warnings
 from copy import deepcopy
 from typing import Optional
 
@@ -8,9 +10,8 @@ import torch
 from torch import nn
 
 from ...data.datasets import BaseDataset
-from ..base.base_utils import ModelOutput
-from ..nn import BaseDecoder, BaseDiscriminator, BaseEncoder
 from ..base.base_utils import CPU_Unpickler, ModelOutput, hf_hub_is_available
+from ..nn import BaseDecoder, BaseDiscriminator, BaseEncoder
 from ..nn.default_architectures import Discriminator_GVAE_MLP
 from ..vae import VAE
 from .gwae_config import GWAEConfig
@@ -23,10 +24,8 @@ logger.setLevel(logging.INFO)
 
 
 class GWAE(VAE):
-    """Gromov-Wasserstein Autoencoders
-    
-    Args:
-    """
+    """Gromov-Wasserstein Autoencoders"""
+
     def __init__(
         self,
         model_config: GWAEConfig,
@@ -113,7 +112,7 @@ class GWAE(VAE):
         x = inputs["data"]
         encoder_output = self.encoder(x)
         mu, log_var = encoder_output.embedding, encoder_output.log_covariance
-        std = torch.exp(0.5 * log_var)
+        std = log_var.mul(0.5).exp()
         z, eps = self._sample_gauss(mu, std)
         recon_x = self.decoder(z)["reconstruction"]
 
@@ -143,7 +142,7 @@ class GWAE(VAE):
             disc_recon_x = self.discriminator.x_network(recon_x)
             loss_w += (0.5 * (disc_x - disc_recon_x) ** 2).sum() / batch_size
 
-        loss_entropy_reg = log_var.sum() / batch_size
+        loss_entropy_reg = -log_var.sum() / batch_size
 
         if self.merged_condition:
             logit_autoencoding = self.discriminator(x, z)
@@ -172,18 +171,12 @@ class GWAE(VAE):
             mu, log_var = encoder_output.embedding, encoder_output.log_covariance
             for _ in range(self.max_epochs_discriminator if self.training else 1):
                 with torch.no_grad():
+                    std = log_var.mul(0.5).exp()
                     z, eps = self._sample_gauss(mu, std)
                     recon_x = self.decoder(z)["reconstruction"]
 
                     z2 = self.sample_from_prior(batch_size)
                     recon_x2 = self.decoder(z2)["reconstruction"]
-
-                # z = z.detach()
-                # recon_x = recon_x.detach()
-                # z2 = z2.detach()
-                # recon_x2 = recon_x2.detach()
-
-
 
                 logit_autoencoding = self.discriminator(x, z)
                 if self.mixed_potential:
@@ -194,12 +187,10 @@ class GWAE(VAE):
                 else:
                     logit_sampling = self.discriminator(recon_x2, z2)
 
-                loss_logits = - (logit_sampling - logit_autoencoding).mean()
+                loss_logits = -(logit_sampling - logit_autoencoding).mean()
 
                 loss_gp = (
-                    self.gradient_penalty_one_centered(
-                        x, z, recon_x2, z2
-                    )
+                    self.gradient_penalty_one_centered(x, z, recon_x2, z2)
                     + 1e-4 * logit_autoencoding.pow(2).mean()
                     + 1e-4 * logit_sampling.pow(2).mean()
                 )
@@ -212,8 +203,8 @@ class GWAE(VAE):
             loss=loss,
             autoencoder_loss=autoencoder_loss,
             discriminator_loss=discriminator_loss,
-            recon_x=recon_x,
-            z=z,
+            # recon_x=recon_x,
+            # z=z,
         )
 
         return output
@@ -309,13 +300,6 @@ class GWAE(VAE):
 
     def sample_from_prior(self, batch_size: int) -> torch.Tensor:
         return self.sampler(batch_size)
-
-    def autoencoder_loss_function(self):
-        pass
-
-    def discriminator_loss_function(self):
-        pass
-
 
     def save(self, dir_path: str):
         """Method to save the model at a specific location

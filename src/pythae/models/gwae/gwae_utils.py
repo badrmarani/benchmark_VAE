@@ -10,7 +10,9 @@ class LeakySiLU(nn.Module):
         self.negative_slope = float(negative_slope)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return (1 - self.negative_slope) * F.silu(input) + self.negative_slope * input
+        return (1 - self.negative_slope) * nn.functional.silu(
+            input
+        ) + self.negative_slope * input
 
 
 class NeuralSampler(nn.Module):
@@ -23,17 +25,16 @@ class NeuralSampler(nn.Module):
         for i in range(4):
             net += [nn.Linear(dim, hidden_dim)]
             if i != 3:
-                net += [nn.ReLU()]
+                net += [LeakySiLU(negative_slope=0.2)]
             else:
                 net += [nn.Linear(dim, embedding_dim)]
             dim = hidden_dim
         net += [nn.BatchNorm1d(embedding_dim, momentum=0.5, affine=False)]
 
         self.net = nn.Sequential(*net)
+        self.device = self.parameters().__next__().device
 
     def forward(self, batch_size: int):
-        device = self.parameters().__next__().device
-
-        eps = torch.randn(size=(batch_size, self.embedding_dim)).to(device)
+        eps = torch.randn(size=(batch_size, self.embedding_dim)).to(device=self.device)
         z = self.net(eps)
         return z
